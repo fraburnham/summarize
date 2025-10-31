@@ -1,0 +1,121 @@
+module Types exposing (..)
+
+import Http
+import Json.Decode as Decode exposing (Decoder, decodeString, map2, map4, field, string, int, array, nullable)
+import Json.Encode as Encode
+
+
+type alias ConfigData =
+    { ollamaUrl : (Maybe String)
+    , model : (Maybe String)
+    }
+
+
+configData : Maybe String -> Maybe String -> ConfigData
+configData ollamaUrl model =
+    { ollamaUrl = ollamaUrl
+    , model = model
+    }
+
+decodeConfigData : String -> ConfigData
+decodeConfigData data =
+    let
+        _ = Debug.log "decodeConfigData data" data
+        decodeResult = decodeString (map2 configData
+                                       (field "ollamaUrl" (nullable string))
+                                       (field "model" (nullable string)))
+                         data
+    in
+    when decodeResult is
+        Err e ->
+            let
+                _ = Debug.log "error" e
+            in
+            { ollamaUrl = Nothing, model = Nothing }
+        Ok c -> c
+
+
+type alias ModelData =
+    { id : String
+    , object : String
+    , created : Int
+    , owned_by : String
+    }
+
+
+modelData : String -> String -> Int -> String -> ModelData
+modelData id object created owned_by =
+    { id = id
+    , object = object
+    , created = created
+    , owned_by = owned_by
+    }
+
+
+modelDataDecoder : Decoder ModelData
+modelDataDecoder =
+    map4 modelData
+      (field "id" string)
+      (field "object" string)
+      (field "created" int)
+      (field "owned_by" string)
+
+
+decodeModelData : String -> Maybe ModelData
+decodeModelData data =
+    let
+        _ = Debug.log "decodeModelData data" data
+        decodeResult = decodeString modelDataDecoder data
+    in
+    when decodeResult is
+        Err e ->
+            let
+                _ = Debug.log "error" e
+            in
+            Nothing
+        Ok m -> Just m
+
+
+type alias ModelsResponseData =
+    { object : String
+    , data : Array ModelData
+    }
+
+
+modelsResponseData : String -> Array ModelData -> ModelsResponseData
+modelsResponseData object data =
+    { object = object
+    , data = data
+    }
+
+
+decodeModelsResponseData : String -> Maybe ModelsResponseData
+decodeModelsResponseData data =
+    let
+        _ = Debug.log "decodeModelsResponseData data" data
+        decodeResult = decodeString (map2 modelsResponseData
+                                       (field "object" string)
+                                       (field "data" (array modelDataDecoder)))
+                         data
+    in
+    when decodeResult is
+        Err e ->
+            let
+                _ = Debug.log "error" e
+            in
+            Nothing
+        Ok m -> Just m
+
+
+
+type alias Model =
+    { config : Maybe ConfigData
+    , modelList : Maybe (Array String)
+    }
+
+
+type Msg
+    = GotConfig ConfigData
+    | LLMUrlUpdated String
+    | ModelsResponse (Result Http.Error String)
+    | ModelSelected String

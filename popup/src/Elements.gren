@@ -1,0 +1,78 @@
+module Elements exposing (configForm, heading, loading)
+
+import Array exposing (map)
+import Html exposing (Html)
+import Html.Attributes as Attribute exposing (class, id, type_, value, selected)
+import Html.Events as Event exposing (onInput)
+
+import Types exposing (..)
+
+
+heading =
+    Html.div [ id "header" ]
+        [ Html.span [ class "semi-bold" ]
+            [ Html.text "summ" ]
+        , Html.span [ class "extra-bold" ]
+            [ Html.text "a" ]
+        , Html.span [ class "semi-bold" ]
+            [ Html.text "r" ]
+        , Html.span [ class "extra-bold" ]
+            [ Html.text "i" ]
+        , Html.span [ class "semi-bold" ]
+            [ Html.text "ze" ]
+        ]
+
+
+loading =
+    Html.div []
+        [ Html.text "Loading..." ]
+
+
+configForm : Model -> Html Msg
+configForm model =
+    Html.div []
+        [ Html.div [ class "input-container" ]
+              [ Html.div []
+                    [ Html.text "LLM API URL" ]
+              , Html.div []
+                  -- TODO: onInput seems to be missing the most recent character...
+                  [ Html.input [ onInput LLMUrlUpdated
+                               , value <| when model.config is
+                                              Just c ->
+                                                  when c.ollamaUrl is
+                                                      Just u -> u
+                                                      Nothing -> ""
+                                              
+                                              Nothing -> ""
+                               ]
+                      [ ]
+                  ]
+              ]
+        , when model.modelList is
+              Nothing -> Html.span [] []
+              Just modelList ->
+                  -- TODO: when this dropdown updates its time to store the config again
+                  -- TODO: would hiding the element somehow be cleaner than the span hack?
+                  Html.div [class "input-container"]
+                    [ Html.div []
+                        [ Html.text "Model" ]
+                    , Html.div []
+                        [ Html.select [ onInput ModelSelected ]
+                            <| map ( \modelName ->
+                                         Html.option [ selected
+                                                         <| when model.config is
+                                                                Just c ->
+                                                                    if modelName == (Maybe.withDefault "" c.model) then
+                                                                        True
+                                                                    else
+                                                                        False
+                                                                Nothing -> False
+                                                     ]
+                                           [ Html.text modelName ]
+                                   ) modelList
+                          -- TODO: handle the seleted model by checking model.config.model
+                        ]
+                    ]
+        ]
+
+-- TODO: should name this file view and move the view fn in here, I think

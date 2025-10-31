@@ -1,0 +1,141 @@
+port module Main exposing (main)
+
+import Array exposing (map)
+import Browser
+import Http
+import Html exposing (Html)
+import Html.Attributes as Attribute exposing (class)
+import Html.Events as Event
+import Json.Decode as Decode
+import Json.Encode as Encode
+import Random
+
+import Elements exposing (configForm, heading, loading)
+import Types exposing (..)
+
+
+main =
+    Browser.element
+        { init = init
+        , update = update
+        , view = view
+        , subscriptions = subscriptions
+        }
+
+
+init : {} -> { model : Model, command : Cmd Msg }
+init _ =
+    { model = { config = Nothing
+              , modelList = Nothing
+              }
+    , command = Cmd.none
+    }
+
+
+port getConfig : (String -> msg) -> Sub msg
+port storeConfig : ConfigData -> Cmd msg
+
+
+getModels : ConfigData -> Cmd Msg
+getModels config =
+    when config.ollamaUrl is
+        Just u ->
+            Http.get { url = u ++ "/v1/models"
+                     , expect = Http.expectString ModelsResponse
+                     }
+        Nothing -> Cmd.none
+
+
+update : Msg -> Model -> { model : Model, command : Cmd Msg }
+update msg model =
+    when msg is
+        ModelsResponse r ->
+            -- TODO: Does the OpenAI api expose the idea of a "loaded" model? Could just use the error
+            --       to ignore (or could do some detection to properly manage it...)
+            when r is
+                Err _ -> 
+                    { model = model
+                    , command = Cmd.none
+                    }
+                Ok d ->
+                    let
+                        decodedResponse = when (decodeModelsResponseData d) is
+                                              Just decoded ->
+                                                  map (\modelData -> modelData.id) decoded.data
+                                              Nothing -> []
+                    in
+                    { model = { model | modelList = Just decodedResponse
+                                      , config = when model.config is
+                                                     Just c ->
+                                                         when c.model is
+                                                             Nothing -> Just { c | model = Array.get 0 decodedResponse }
+                                                             Just _ -> Just c
+                                                     Nothing -> Nothing
+                              }
+                    , command = Cmd.none
+                    }
+
+        GotConfig c ->
+            { model = { model | config = Just <| Debug.log "config" c }
+            , command = when model.modelList is
+                            Just _ -> Cmd.none
+                            Nothing -> getModels c
+            }
+
+        ModelSelected m ->
+            when model.config is
+                Just c ->
+                    let
+                        newConfig = { c | model = Just m }
+                    in
+                    { model = { model | config = Just newConfig }
+                    -- TODO: This needs to _set_ the model, too
+                    , command = storeConfig newConfig
+                    }
+
+                Nothing ->
+                    -- The load hasn't happened yet, don't update anything
+                    { model = model
+                    , command = Cmd.none
+                    }
+
+        LLMUrlUpdated u ->
+            when model.config is
+                Just c ->
+                    { model = { model | config = Just { c | ollamaUrl = Just u } }
+                    -- TODO: So I want a fn that checks if the url looks complete then tries to query the api
+                    --       Looks like Cmd.batch to handle the http request and the config store
+                    --       I'll probably want to lift the logic out to a fn for readability
+                    --       OH! If I can start/reset a timer on each keydown then I can want for that to expire
+                    --       which should be a good indicator of "ready to use"
+                    , command = Cmd.batch [ storeConfig c
+                                          , getModels c
+                                          ]
+                    }
+
+                Nothing ->
+                    -- The load hasn't happened yet, don't update anything
+                    { model = model
+                    , command = Cmd.none
+                    }
+
+
+view : Model -> Html Msg
+view model =
+    let 
+        _ = Debug.log "view model" model
+    in
+    Html.div [ class "app" ]
+      [ heading
+      , when model.config is
+            Nothing -> loading
+            Just _ -> configForm model
+      ]
+        
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    -- `a >> b` means (comp a b)
+    getConfig <| decodeConfigData >> GotConfig
+
+        
