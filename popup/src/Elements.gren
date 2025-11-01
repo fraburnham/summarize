@@ -27,6 +27,18 @@ loading =
     Html.div []
         [ Html.text "Loading..." ]
 
+modelOption : Model -> String -> Html Msg
+modelOption model modelName =
+    Html.option [ selected
+                    <| when model.config is
+                           Just c ->
+                               if modelName == (Maybe.withDefault "" c.model) then
+                                   True
+                               else
+                                   False
+                           Nothing -> False
+                 ]
+      [ Html.text modelName ]
 
 configForm : Model -> Html Msg
 configForm model =
@@ -50,27 +62,14 @@ configForm model =
               ]
         , when model.modelList is
               Nothing -> Html.span [] []
+
               Just modelList ->
-                  -- TODO: when this dropdown updates its time to store the config again
-                  -- TODO: would hiding the element somehow be cleaner than the span hack?
                   Html.div [class "input-container"]
                     [ Html.div []
                         [ Html.text "Model" ]
                     , Html.div []
                         [ Html.select [ onInput ModelSelected ]
-                            <| map ( \modelName ->
-                                         Html.option [ selected
-                                                         <| when model.config is
-                                                                Just c ->
-                                                                    if modelName == (Maybe.withDefault "" c.model) then
-                                                                        True
-                                                                    else
-                                                                        False
-                                                                Nothing -> False
-                                                     ]
-                                           [ Html.text modelName ]
-                                   ) modelList
-                          -- TODO: handle the seleted model by checking model.config.model
+                            <| map (modelOption model) modelList
                         ]
                     ]
         ]
