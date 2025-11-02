@@ -2,3 +2,5 @@
 popup/app.js
 .gren/
 gren_packages/
+**/node_modules
+**/dist
